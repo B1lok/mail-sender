@@ -1,0 +1,71 @@
+version: "3.9"
+services:
+  zookeeper:
+    image: 'bitnami/zookeeper:latest'
+    container_name: zookeeper
+    networks:
+      - backend
+    ports:
+      - '2181:2181'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  kafka:
+    image: 'bitnami/kafka:latest'
+    container_name: kafka
+    networks:
+      - backend
+    ports:
+      - '9092:9094'
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT= zookeeper:2181
+      - KAFKA_LISTENERS= INTERNAL://0.0.0.0:9092,OUTSIDE://0.0.0.0:9094
+      - KAFKA_ADVERTISED_LISTENERS= INTERNAL://kafka:9092,OUTSIDE://localhost:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP= INTERNAL:PLAINTEXT,OUTSIDE:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME= INTERNAL
+    depends_on:
+      - zookeeper
+  elasticsearch:
+    image: elasticsearch:8.6.1
+    container_name: elasticsearch
+    networks:
+      - backend
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+  kibana:
+    image: kibana:8.6.1
+    container_name: kibana
+    networks:
+      - backend
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+  mail-sender:
+    image: mail-sender:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '8081:8081'
+    depends_on:
+      - kafka
+      - elasticsearch
+      - zookeeper
+      - kibana
+    networks:
+      - backend
+    environment:
+      - SPRING_MAIL_HOST=${SPRING_MAIL_HOST}
+      - SPRING_MAIL_PORT=${SPRING_MAIL_PORT}
+      - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME}
+      - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD}
+      - ELASTICSEARCH_ADDRESS=elasticsearch:9200
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+networks:
+  backend:
+    driver: bridge
